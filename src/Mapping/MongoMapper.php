@@ -328,8 +328,18 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 
 		$result = [];
 		foreach ($cursor as $row) {
+			if (!isset($row->$key)) {
+				continue;
+			}
+
 			$key = $row->$key instanceof \MongoDB\BSON\ObjectId ? (string)$row->$key : $row->$key;
-			$value = $row->$value instanceof \MongoDB\BSON\ObjectId ? (string)$row->$value : $row->$value;
+
+			if (!isset($row->$value)) {
+				$value = null;
+			} else {
+				$value = $row->$value instanceof \MongoDB\BSON\ObjectId ? (string)$row->$value : $row->$value;
+			}
+
 			$result[$key] = $value;
 		}
 
@@ -345,7 +355,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 		\Sellastica\Entity\Configuration $configuration = null
 	)
 	{
-		if ($entity->getChangedData()) {
+		if ($entity->isChanged()) {
 			$this->getCollection($configuration)->replaceOne(
 				['_id' => $entity->getObjectId()],
 				$this->appendModifiedTimestamp($entity->toArray())
@@ -444,6 +454,15 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 		}
 
 		$this->getCollection($configuration)->deleteOne(['_id' => $id]);
+	}
+
+	/**
+	 * @param array $filter
+	 * @param array $data
+	 */
+	public function updateMany(array $filter, array $data): void
+	{
+		$this->getCollection()->updateMany($filter, $data);
 	}
 
 	/**
