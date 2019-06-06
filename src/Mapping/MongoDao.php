@@ -477,6 +477,15 @@ abstract class MongoDao implements \Sellastica\Entity\Mapping\IDao
 	}
 
 	/**
+	 * @param array $filter
+	 * @param array $data
+	 */
+	public function updateMany(array $filter, array $data): void
+	{
+		$this->mapper->updateMany($filter, $data);
+	}
+
+	/**
 	 * @param \Sellastica\Entity\Entity\IEntity[] $entities
 	 */
 	public function batchInsert(array $entities): void
