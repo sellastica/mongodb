@@ -43,6 +43,6 @@ class DatabaseFactory implements IDatabaseFactory
 			throw new \InvalidArgumentException('Unknown database name, it should be defined in the project');
 		}
 		
-		return $this->clientFactory->createClient()->selectDatabase($database);
+		return $this->clientFactory->create()->selectDatabase($database);
 	}
 }

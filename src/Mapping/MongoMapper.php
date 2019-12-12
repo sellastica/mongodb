@@ -9,20 +9,25 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 	private $adminUserAccessor;
 	/** @var IDatabaseFactory */
 	private $databaseFactory;
+	/** @var \Sellastica\MongoDB\Profiling\IProfiler */
+	private $profiler;
 
 
 	/**
 	 * @param IDatabaseFactory $databaseFactory
 	 * @param \Sellastica\AdminUI\User\Model\AdminUserAccessor $adminUserAccessor
+	 * @param \Sellastica\MongoDB\Profiling\IProfiler $profiler
 	 */
 	public function __construct(
 		IDatabaseFactory $databaseFactory,
-		\Sellastica\AdminUI\User\Model\AdminUserAccessor $adminUserAccessor
+		\Sellastica\AdminUI\User\Model\AdminUserAccessor $adminUserAccessor,
+		\Sellastica\MongoDB\Profiling\IProfiler $profiler
 	)
 	{
 		$this->databaseFactory = $databaseFactory;
 		$this->adminUserAccessor = $adminUserAccessor;
 		$this->collectionName = $this->getCollectionName();
+		$this->profiler = $profiler;
 	}
 
 	/**
@@ -80,9 +85,12 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 			}
 		}
 
-		return isset($id)
-			? $this->getCollection($configuration)->findOne(['_id' => $id])
-			: null;
+		if (isset($id)) {
+			$this->profiler->addSelect();
+			return $this->getCollection($configuration)->findOne(['_id' => $id]);
+		} else {
+			return null;
+		}
 	}
 
 	/**
@@ -141,6 +149,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 		\Sellastica\Entity\Configuration $configuration = null
 	): iterable
 	{
+		$this->profiler->addSelect();
 		return $this->getCollection($configuration)->find([], $this->getOptions([], $configuration));
 	}
 
@@ -170,7 +179,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 			if ($paginator = $configuration->getPaginator()) {
 				$paginator->setItemCount($this->findCountBy($filter));
 				$options['limit'] = $paginator->getItemsPerPage();
-				$options['skip'] = $paginator->getOffset();
+				$options['skip'] = $configuration->getOffset() ?? $paginator->getOffset();
 			}
 		}
 
@@ -225,6 +234,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 		\Sellastica\Entity\Configuration $configuration = null
 	): iterable
 	{
+		$this->profiler->addSelect();
 		return $this->getCollection($configuration)->find($filter, $this->getOptions($filter, $configuration));
 	}
 
@@ -268,16 +278,17 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 		\Sellastica\Entity\Configuration $configuration = null
 	)
 	{
+		$this->profiler->addSelect();
 		return $this->getCollection($configuration)->findOne($filter, $this->getOptions($filter, $configuration));
 	}
 
 	/**
-	 * @param \Sellastica\Entity\Configuration|null $configuration
 	 * @return int
 	 */
-	public function findCount(\Sellastica\Entity\Configuration $configuration = null): int
+	public function findCount(): int
 	{
-		return $this->getCollection($configuration)->countDocuments();
+		$this->profiler->addSelect();
+		return $this->getCollection()->estimatedDocumentCount();
 	}
 
 	/**
@@ -287,7 +298,8 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 	 */
 	public function findCountBy(array $filter, \Sellastica\Entity\Configuration $configuration = null): int
 	{
-		return $this->getCollection($configuration)->countDocuments($filter);
+		$this->profiler->addSelect();
+		return $this->getCollection($configuration)->count($filter);
 	}
 
 	/**
@@ -304,20 +316,15 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 		\Sellastica\Entity\Configuration $configuration = null
 	): array
 	{
-		if ($key === 'id') {
-			$key = '_id';
-		}
-
-		if ($value === 'id') {
-			$value = '_id';
-		}
+		$searchKey = $key === 'id' ? '_id' : $key;
+		$searchValue = $value === 'id' ? '_id' : $value;
 
 		$projection = [
-			$key => 1,
-			$value => 1,
+			$searchKey => 1,
+			$searchValue => 1,
 		];
-		if ($key !== '_id'
-			&& $value !== '_id') {
+		if ($searchKey !== '_id'
+			&& $searchValue !== '_id') {
 			$projection['_id'] = 0;
 		}
 
@@ -325,6 +332,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 			$filter,
 			array_merge(['projection' => $projection], $this->getOptions($filter, $configuration))
 		);
+		$this->profiler->addSelect();
 
 		$result = [];
 		foreach ($cursor as $row) {
@@ -332,15 +340,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 				continue;
 			}
 
-			$key = $row->$key instanceof \MongoDB\BSON\ObjectId ? (string)$row->$key : $row->$key;
-
-			if (!isset($row->$value)) {
-				$value = null;
-			} else {
-				$value = $row->$value instanceof \MongoDB\BSON\ObjectId ? (string)$row->$value : $row->$value;
-			}
-
-			$result[$key] = $value;
+			$result[is_scalar($row->$key) ? $row->$key : (string)$row->$key] = $row->$value ?? null;
 		}
 
 		return $result;
@@ -360,6 +360,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 				['_id' => $entity->getObjectId()],
 				$this->appendModifiedTimestamp($entity->toArray())
 			);
+			$this->profiler->addUpdate();
 		}
 	}
 
@@ -377,6 +378,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 				$entity->toArray(true)
 			)
 		);
+		$this->profiler->addInsert();
 	}
 
 	/**
@@ -408,6 +410,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 			}
 
 			$this->getCollection($configuration)->insertMany($arrays);
+			$this->profiler->addInsert();
 		}
 	}
 
@@ -463,6 +466,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 	public function updateMany(array $filter, array $data): void
 	{
 		$this->getCollection()->updateMany($filter, $data);
+		$this->profiler->addUpdate();
 	}
 
 	/**
@@ -527,6 +531,7 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 	 */
 	public function existsBy(array $filter): bool
 	{
+		$this->profiler->addSelect();
 		return $this->findCountBy($filter) > 0;
 	}
 

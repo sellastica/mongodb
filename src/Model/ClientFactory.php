@@ -19,29 +19,19 @@ class ClientFactory extends \Sellastica\Core\Model\FactoryAccessor
 	}
 
 	/**
-	 * @return \MongoDB\Database
-	 */
-	public function create(): \MongoDB\Database
-	{
-		$client = $this->createClient();
-		return $client->selectDatabase(
-			$this->config['database']
-		);
-	}
-
-	/**
 	 * @param bool $includeTypeMap
 	 * @return \MongoDB\Client
 	 */
-	public function createClient(bool $includeTypeMap = true): \MongoDB\Client
+	public function create(bool $includeTypeMap = true): \MongoDB\Client
 	{
 		$driverOptions = $includeTypeMap
 			? [
 				'typeMap' => [
-				'array' => 'Sellastica\MongoDB\Model\BSONArray',
-				'document' => 'Sellastica\MongoDB\Model\BSONDocument',
-				'root' => 'Sellastica\MongoDB\Model\BSONDocument',
-			]]
+					'array' => 'Sellastica\MongoDB\Model\BSONArray',
+					'document' => 'Sellastica\MongoDB\Model\BSONDocument',
+					'root' => 'Sellastica\MongoDB\Model\BSONDocument',
+				],
+			]
 			: [];
 		return new \MongoDB\Client(
 			'mongodb://' . $this->config['host'] . '/',
