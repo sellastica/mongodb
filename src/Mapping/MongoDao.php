@@ -145,6 +145,16 @@ abstract class MongoDao implements \Sellastica\Entity\Mapping\IDao
 	}
 
 	/**
+	 * @param array $filter
+	 * @param array $fields
+	 * @return iterable
+	 */
+	public function findFieldsBy(array $filter, array $fields): iterable
+	{
+		return $this->mapper->findFieldsBy($filter, $fields);
+	}
+
+	/**
 	 * Method similar to find(), except that the first parameter is an array with entity IDs
 	 *
 	 * @param array $idsArray

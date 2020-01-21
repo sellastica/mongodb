@@ -129,6 +129,22 @@ abstract class MongoMapper implements \Sellastica\Entity\Mapping\IMapper
 	}
 
 	/**
+	 * @param array $filter
+	 * @param array $fields
+	 * @return iterable
+	 */
+	public function findFieldsBy(array $filter, array $fields): iterable
+	{
+		$projection = [];
+		foreach ($fields as $field) {
+			$projection[$field] = 1;
+		}
+
+		$this->profiler->addSelect();
+		return $this->getCollection()->find($filter, ['projection' => $projection]);
+	}
+
+	/**
 	 * @param array $idsArray
 	 * @param \Sellastica\Entity\Configuration|null $configuration
 	 * @return array
